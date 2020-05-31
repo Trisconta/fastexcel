@@ -1,5 +1,13 @@
 # (c)2020  Henrique Moreira  -- fast Excel read-out
 
+""" fastexcel.py script allows you to learn Excel openpyxl usage """
+
+# pylint: disable=unnecessary-comprehension, invalid-name
+
+### Notes:
+###	unnecessary-comprehension, see:
+###		https://github.com/PyCQA/pylint/issues/3164
+
 import sys
 from openpyxl import load_workbook
 
@@ -9,10 +17,20 @@ _SEP_CELL = "; "
 
 def main():
     """ Main script """
-    reader(sys.stdout, sys.stderr, sys.argv[1:])
+    code = reader(sys.stdout, sys.stderr, sys.argv[1:])
+    if code is None:
+        print("""fastexcel.py Excel-file [sheet [...]]
 
-    
+fastexcel script allows you to quickly learn how to use openpyxl.
+""")
+        code = 0
+    sys.exit(code)
+
+
 def reader(out, err, args):
+    """ Reader function """
+    if not args:
+        return None
     param = args
     path = param[0]
     del param[0]
@@ -22,14 +40,20 @@ def reader(out, err, args):
         sheets = []
     active = sheets == []
     suite = xcel_reader(path, sheets, active)
+    if suite is None:
+        err.write("Uops, cannot read: {}\n".format(suite))
     dump_xcel(out, suite)
     return 0
 
 
 def xcel_reader(path, sheets=None, active=True):
+    """ Excel reader function """
     assert isinstance(path, str)
     suite = {"path": path}
-    wb = load_workbook(path)
+    try:
+        wb = load_workbook(path)
+    except FileNotFoundError:
+        return None
     if wb:
         sheet_names = wb.sheetnames
         ws_active = wb.active
@@ -46,22 +70,26 @@ def xcel_reader(path, sheets=None, active=True):
 
 
 def dump_xcel(out, suite, debug=0):
+    """ Dump one Excel sheet """
     #sheets = suite["req-sheets"]
-    cont, info = dump_one(out, suite, suite["ws-sel"][0], debug)
+    sheet = suite["ws-sel"][0]
+    cont, info = dump_one(sheet, out, debug)
     (title, _), (max_col, max_row), _ = info
-    if debug >= 0:
+    if debug > 0:
         print("Debug: '{}': cols={}, rows={}, {}"
               "".format(title, max_col, max_row, cont if cont else "(empty)"))
     return 0
 
 
-def dump_one(out, suite, sheet, debug=0):
+def dump_one(sheet, out=None, debug=0):
+    """ Dump sheet content to stdout (or another text stream) """
+    output = out if out is not None else sys.stdout
     ws = sheet
     rows = [row for row in ws.rows]
     info = ((ws.title, ws.path), (ws.max_column, ws.max_row), ws.sheet_properties,
             )
     if not rows:
-        return tuple(), inf
+        return tuple(), info
     idx = 0
     for row in rows:
         idx += 1
@@ -75,11 +103,13 @@ def dump_one(out, suite, sheet, debug=0):
             else:
                 val = cell_repr(cell)
             w += val
-        out.write("{}{}\n".format(s, w))
+        if output:
+            output.write("{}{}\n".format(s, w))
     return (ws.max_row,), info
 
 
 def cell_repr(cell, when_null="---"):
+    """ Cell representation """
     assert isinstance(when_null, str)
     if cell.value is None:
         s = when_null
