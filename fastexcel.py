@@ -13,6 +13,7 @@ from openpyxl import load_workbook
 
 
 _SEP_CELL = "; "
+_DEBUG = 0
 
 
 def main():
@@ -29,6 +30,7 @@ fastexcel script allows you to quickly learn how to use openpyxl.
 
 def reader(out, err, args):
     """ Reader function """
+    debug = _DEBUG
     if not args:
         return None
     param = args
@@ -42,7 +44,7 @@ def reader(out, err, args):
     suite = xcel_reader(path, sheets, active)
     if suite is None:
         err.write("Uops, cannot read: {}\n".format(suite))
-    dump_xcel(out, suite)
+    dump_xcel(out, suite, debug)
     return 0
 
 
