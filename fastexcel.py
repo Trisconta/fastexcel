@@ -1,14 +1,15 @@
-# (c)2020  Henrique Moreira  -- fast Excel read-out
+# (c)2020..2026  Henrique Moreira  -- fast Excel read-out
 
 """ fastexcel.py script allows you to learn Excel openpyxl usage """
 
-# pylint: disable=unnecessary-comprehension, invalid-name
+# pylint: disable=consider-using-f-string
 
 ### Notes:
 ###	unnecessary-comprehension, see:
 ###		https://github.com/PyCQA/pylint/issues/3164
 
 import sys
+import warnings
 from openpyxl import load_workbook
 
 
@@ -43,31 +44,34 @@ def reader(out, err, args):
     active = sheets == []
     suite = xcel_reader(path, sheets, active)
     if suite is None:
-        err.write("Uops, cannot read: {}\n".format(suite))
+        err.write(f"Uops, cannot read: {path}\n")
     dump_xcel(out, suite, debug)
     return 0
 
 
 def xcel_reader(path, sheets=None, active=True):
     """ Excel reader function """
-    assert isinstance(path, str)
+    assert isinstance(path, str), f"Wrong path, not a string: {[path]}"
     suite = {"path": path}
     try:
-        wb = load_workbook(path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            wbk = load_workbook(path)
     except FileNotFoundError:
         return None
-    if wb:
-        sheet_names = wb.sheetnames
-        ws_active = wb.active
-        if active:
-            ws_sel = [ws_active,]
-        else:
-            ws_sel = [wb.get_sheet_by_name(sheets[0])]
-        suite["wb"] = wb
-        suite["req-sheets"] = sheets
-        suite["sheet-names"] = sheet_names
-        suite["active"] = ws_active
-        suite["ws-sel"] = ws_sel
+    if not wbk:
+        return suite
+    sheet_names = wbk.sheetnames
+    ws_active = wbk.active
+    if active:
+        ws_sel = [ws_active,]
+    else:
+        ws_sel = [wbk.get_sheet_by_name(sheets[0])]
+    suite["wb"] = wbk
+    suite["req-sheets"] = sheets
+    suite["sheet-names"] = sheet_names
+    suite["active"] = ws_active
+    suite["ws-sel"] = ws_sel
     return suite
 
 
@@ -75,7 +79,7 @@ def dump_xcel(out, suite, debug=0):
     """ Dump one Excel sheet """
     #sheets = suite["req-sheets"]
     sheet = suite["ws-sel"][0]
-    cont, info = dump_one(sheet, out, debug)
+    cont, info = dump_one(sheet, out, debug=debug)
     (title, _), (max_col, max_row), _ = info
     if debug > 0:
         print("Debug: '{}': cols={}, rows={}, {}"
@@ -83,18 +87,16 @@ def dump_xcel(out, suite, debug=0):
     return 0
 
 
-def dump_one(sheet, out=None, debug=0):
+def dump_one(sheet, out=None, y_start=1, debug=0):
     """ Dump sheet content to stdout (or another text stream) """
     output = out if out is not None else sys.stdout
     ws = sheet
-    rows = [row for row in ws.rows]
-    info = ((ws.title, ws.path), (ws.max_column, ws.max_row), ws.sheet_properties,
-            )
-    if not rows:
-        return tuple(), info
-    idx = 0
-    for row in rows:
-        idx += 1
+    info = (
+        (ws.title, ws.path),
+        (ws.max_column, ws.max_row),
+        ws.sheet_properties,
+    )
+    for idx, row in enumerate(ws.rows, y_start):
         s = "{}#\t".format(idx)
         w = ""
         for cell in row:
