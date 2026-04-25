@@ -11,6 +11,7 @@
 import sys
 import warnings
 from openpyxl import load_workbook
+import europattern
 
 
 _SEP_CELL = "; "
@@ -21,9 +22,13 @@ def main():
     """ Main script """
     code = reader(sys.stdout, sys.stderr, sys.argv[1:])
     if code is None:
-        print("""fastexcel.py Excel-file [sheet [...]]
+        print("""fastexcel.py Excel-file [options] file.xlsx [sheet [...]]
 
-fastexcel script allows you to quickly learn how to use openpyxl.
+fastexcel script allows you to quickly learn how to use openpyxl,
+by dumping the Excel 'active-sheet' (or the corresponding sheet) into text.
+
+Options are:
+	-s	Skip column heading
 """)
         code = 0
     sys.exit(code)
@@ -32,9 +37,18 @@ fastexcel script allows you to quickly learn how to use openpyxl.
 def reader(out, err, args):
     """ Reader function """
     debug = _DEBUG
+    opts = {
+        "skip": False,
+    }
     if not args:
         return None
     param = args
+    while param and param[0].startswith("-"):
+        if param[0] in ("-s", "--skip"):
+            opts["skip"] = True
+            del param[0]
+            continue
+        return None
     path = param[0]
     del param[0]
     if param:
@@ -45,7 +59,7 @@ def reader(out, err, args):
     suite = xcel_reader(path, sheets, active)
     if suite is None:
         err.write(f"Uops, cannot read: {path}\n")
-    dump_xcel(out, suite, debug)
+    dump_xcel(out, suite, opts, debug)
     return 0
 
 
@@ -75,11 +89,11 @@ def xcel_reader(path, sheets=None, active=True):
     return suite
 
 
-def dump_xcel(out, suite, debug=0):
+def dump_xcel(out, suite, opts, debug=0):
     """ Dump one Excel sheet """
     #sheets = suite["req-sheets"]
     sheet = suite["ws-sel"][0]
-    cont, info = dump_one(sheet, out, debug=debug)
+    cont, info = dump_one(sheet, out, opts, debug=debug)
     (title, _), (max_col, max_row), _ = info
     if debug > 0:
         print("Debug: '{}': cols={}, rows={}, {}"
@@ -87,17 +101,18 @@ def dump_xcel(out, suite, debug=0):
     return 0
 
 
-def dump_one(sheet, out=None, y_start=1, debug=0):
+def dump_one(sheet, out=None, opts=None, y_start=1, debug=0):
     """ Dump sheet content to stdout (or another text stream) """
     output = out if out is not None else sys.stdout
     ws = sheet
+    skip = opts.get("skip", False)
     info = (
         (ws.title, ws.path),
         (ws.max_column, ws.max_row),
         ws.sheet_properties,
     )
     for idx, row in enumerate(ws.rows, y_start):
-        s = "{}#\t".format(idx)
+        s = "" if skip else "{}#\t".format(idx)
         w = ""
         for cell in row:
             if w:
@@ -114,7 +129,7 @@ def dump_one(sheet, out=None, y_start=1, debug=0):
 
 def cell_repr(cell, when_null="---"):
     """ Cell representation """
-    assert isinstance(when_null, str)
+    assert isinstance(when_null, str), "when_null invalid"
     if cell.value is None:
         s = when_null
     elif cell.data_type == "n":
@@ -126,9 +141,26 @@ def cell_repr(cell, when_null="---"):
             zeros = 0
         fmt = "{:0."+str(zeros)+"f}"
         s = fmt.format(cell.value)
+    elif cell.data_type == "s":
+        s = mystring(cell.value)
     else:
         s = "{}".format(cell.value)
+        if s.endswith(" 00:00:00"):
+            s = s[:-len(" 00:00:00")]
     return s
+
+
+def mystring(astr, do_normalize=True):
+    """ Simple string conversion. """
+    res = astr.replace("\t", "\\t")
+    res = res.replace("\u20AC", "")
+    if do_normalize:
+        pat = europattern.normalize_number(res)
+    else:
+        pat = None
+    if pat is None:
+        return res
+    return pat
 
 
 def shown_cell_type(cell):
