@@ -1,6 +1,9 @@
-# (c)2020..2026  Henrique Moreira  -- fast Excel read-out
+#!/usr/bin/env python3
 
-""" fastexcel.py script allows you to learn Excel openpyxl usage """
+""" fastexcel.py script allows you to learn Excel openpyxl usage
+
+(c)2020..2026  Henrique Moreira
+"""
 
 # pylint: disable=consider-using-f-string
 
@@ -66,22 +69,21 @@ def reader(out, err, args):
 def xcel_reader(path, sheets=None, active=True):
     """ Excel reader function """
     assert isinstance(path, str), f"Wrong path, not a string: {[path]}"
-    suite = {"path": path}
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            wbk = load_workbook(path)
-    except FileNotFoundError:
-        return None
-    if not wbk:
-        return suite
+    suite = {
+        "path": path,
+        "wb": None,
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        wbk = wrap_load_book(path)
+        suite["wb"] = wbk
     sheet_names = wbk.sheetnames
     ws_active = wbk.active
     if active:
         ws_sel = [ws_active,]
     else:
         ws_sel = [wbk.get_sheet_by_name(sheets[0])]
-    suite["wb"] = wbk
+    assert suite["wb"], "Null!"
     suite["req-sheets"] = sheets
     suite["sheet-names"] = sheet_names
     suite["active"] = ws_active
@@ -93,7 +95,7 @@ def dump_xcel(out, suite, opts, debug=0):
     """ Dump one Excel sheet """
     #sheets = suite["req-sheets"]
     sheet = suite["ws-sel"][0]
-    cont, info = dump_one(sheet, out, opts, debug=debug)
+    cont, info = dump_one(suite, sheet, out, opts, debug=debug)
     (title, _), (max_col, max_row), _ = info
     if debug > 0:
         print("Debug: '{}': cols={}, rows={}, {}"
@@ -101,7 +103,7 @@ def dump_xcel(out, suite, opts, debug=0):
     return 0
 
 
-def dump_one(sheet, out=None, opts=None, y_start=1, debug=0):
+def dump_one(suite, sheet, out=None, opts=None, y_start=1, debug=0):
     """ Dump sheet content to stdout (or another text stream) """
     output = out if out is not None else sys.stdout
     ws = sheet
@@ -179,6 +181,15 @@ def shown_cell_type(cell):
     else:
         letter = "c" if s == "str" else s[0]
     return letter
+
+
+def wrap_load_book(path: str):
+    """ Wrapper for load_workbook """
+    # The following breaks at 'ws.path'!
+    #wbk = load_workbook(path, data_only=True, read_only=True)
+    # Loading normally:
+    wbk = load_workbook(path)
+    return wbk
 
 
 #
