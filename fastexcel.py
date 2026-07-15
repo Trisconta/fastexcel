@@ -188,7 +188,7 @@ def wrap_load_book(path: str):
     # The following breaks at 'ws.path'!
     #wbk = load_workbook(path, data_only=True, read_only=True)
     # Loading normally:
-    wbk = load_workbook(path)
+    wbk = load_workbook(path, data_only=True)
     return wbk
 
 
