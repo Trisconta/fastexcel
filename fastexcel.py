@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+#-*- coding: utf-8 -*-
 
 """ fastexcel.py script allows you to learn Excel openpyxl usage
 
 (c)2020..2026  Henrique Moreira
 """
 
-# pylint: disable=consider-using-f-string
+# pylint: disable=consider-using-f-string, too-many-arguments
 
 ### Notes:
 ###	unnecessary-comprehension, see:
@@ -15,6 +16,8 @@ import sys
 import warnings
 from openpyxl import load_workbook
 import europattern
+
+__version__ = "1.00 51"
 
 DATA_ONLY = True
 
@@ -26,7 +29,7 @@ def main():
     """ Main script """
     code = reader(sys.stdout, sys.stderr, sys.argv[1:])
     if code is None:
-        print("""fastexcel.py Excel-file [options] file.xlsx [sheet [...]]
+        print(f"""fastexcel.py Excel-file [options] file.xlsx [sheet [...]]
 
 fastexcel script allows you to quickly learn how to use openpyxl,
 by dumping the Excel 'active-sheet' (or the corresponding sheet) into text.
@@ -34,6 +37,8 @@ by dumping the Excel 'active-sheet' (or the corresponding sheet) into text.
 Options are:
 	-s	Skip column heading
 	-m	Show formulas
+
+Version: {__version__}
 """)
         code = 0
     sys.exit(code)
@@ -115,11 +120,6 @@ def dump_one(suite, sheet, out=None, opts=None, y_start=1, debug=0):
     output = out if out is not None else sys.stdout
     ws = sheet
     skip = opts.get("skip", False)
-    info = (
-        (ws.title, ws.path),
-        (ws.max_column, ws.max_row),
-        ws.sheet_properties,
-    )
     for idx, row in enumerate(ws.rows, y_start):
         s = "" if skip else "{}#\t".format(idx)
         w = ""
@@ -133,7 +133,14 @@ def dump_one(suite, sheet, out=None, opts=None, y_start=1, debug=0):
             w += val
         if output:
             output.write("{}{}\n".format(s, w))
-    return (ws.max_row,), info
+    return (
+        (ws.max_row,),
+        (
+            (ws.title, ws.path),
+            (ws.max_column, ws.max_row),
+            ws.sheet_properties,
+        )
+    )
 
 
 def cell_repr(cell, when_null="---"):
@@ -146,7 +153,7 @@ def cell_repr(cell, when_null="---"):
         num_fmt = cell.number_format
         spl = num_fmt.split(".")
         if num_fmt.startswith(("G", "General")):
-            s = f"{cell.value:g}"	# generic Python format!
+            s = _generalis_format(cell, num_fmt)
         if len(spl) > 1:
             zeros = spl[-1].count("0")
         else:
@@ -155,12 +162,22 @@ def cell_repr(cell, when_null="---"):
             fmt = "{:0."+str(zeros)+"f}"
             s = fmt.format(cell.value)
         # Debug:	s = repr([num_fmt, cell.value, s, spl, zeros])
+        #s = repr([num_fmt, cell.value, s, spl, zeros])
     elif cell.data_type == "s":
         s = mystring(cell.value)
     else:
         s = "{}".format(cell.value)
         if s.endswith(" 00:00:00"):
             s = s[:-len(" 00:00:00")]
+    return s
+
+def _generalis_format(cell, num_fmt):
+    if not isinstance(cell.value, float):
+        return str(cell.value)
+    if cell.value.is_integer():
+        s = str(int(cell.value))
+    else:
+        s = f"{cell.value:g}"
     return s
 
 
@@ -173,8 +190,17 @@ def mystring(astr, do_normalize=True):
     else:
         pat = None
     if pat is None:
-        return res
+        return string_7bit(res)
     return pat
+
+def string_7bit(astr: str, alt: str="."):
+    """ Returns dots instead of chars ASCII above or equal to 127d. """
+    assert isinstance(astr, str), f"Bad string_7bit(): {[astr]}"
+    myset = [
+        aba if aba <= '~' else alt for aba in astr
+        if aba in ("\t", "\n") or aba >= ' '
+    ]
+    return ''.join(myset)
 
 
 def shown_cell_type(cell):
