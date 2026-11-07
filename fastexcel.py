@@ -16,6 +16,7 @@ import warnings
 from openpyxl import load_workbook
 import europattern
 
+DATA_ONLY = True
 
 _SEP_CELL = "; "
 _DEBUG = 0
@@ -32,6 +33,7 @@ by dumping the Excel 'active-sheet' (or the corresponding sheet) into text.
 
 Options are:
 	-s	Skip column heading
+	-m	Show formulas
 """)
         code = 0
     sys.exit(code)
@@ -42,6 +44,7 @@ def reader(out, err, args):
     debug = _DEBUG
     opts = {
         "skip": False,
+        "data-only": DATA_ONLY,
     }
     if not args:
         return None
@@ -49,6 +52,10 @@ def reader(out, err, args):
     while param and param[0].startswith("-"):
         if param[0] in ("-s", "--skip"):
             opts["skip"] = True
+            del param[0]
+            continue
+        if param[0] in ("-m", "--formulas"):
+            opts["data-only"] = False
             del param[0]
             continue
         return None
@@ -59,14 +66,14 @@ def reader(out, err, args):
     else:
         sheets = []
     active = sheets == []
-    suite = xcel_reader(path, sheets, active)
+    suite = xcel_reader(path, sheets, active, data_only=opts["data-only"])
     if suite is None:
         err.write(f"Uops, cannot read: {path}\n")
     dump_xcel(out, suite, opts, debug)
     return 0
 
 
-def xcel_reader(path, sheets=None, active=True):
+def xcel_reader(path, sheets=None, active=True, data_only=True):
     """ Excel reader function """
     assert isinstance(path, str), f"Wrong path, not a string: {[path]}"
     suite = {
@@ -75,7 +82,7 @@ def xcel_reader(path, sheets=None, active=True):
     }
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        wbk = wrap_load_book(path)
+        wbk = wrap_load_book(path, data_only=data_only)
         suite["wb"] = wbk
     sheet_names = wbk.sheetnames
     ws_active = wbk.active
@@ -132,17 +139,22 @@ def dump_one(suite, sheet, out=None, opts=None, y_start=1, debug=0):
 def cell_repr(cell, when_null="---"):
     """ Cell representation """
     assert isinstance(when_null, str), "when_null invalid"
+    s = None
     if cell.value is None:
         s = when_null
     elif cell.data_type == "n":
         num_fmt = cell.number_format
         spl = num_fmt.split(".")
+        if num_fmt.startswith(("G", "General")):
+            s = f"{cell.value:g}"	# generic Python format!
         if len(spl) > 1:
             zeros = spl[-1].count("0")
         else:
             zeros = 0
-        fmt = "{:0."+str(zeros)+"f}"
-        s = fmt.format(cell.value)
+        if s is None:
+            fmt = "{:0."+str(zeros)+"f}"
+            s = fmt.format(cell.value)
+        # Debug:	s = repr([num_fmt, cell.value, s, spl, zeros])
     elif cell.data_type == "s":
         s = mystring(cell.value)
     else:
@@ -183,12 +195,12 @@ def shown_cell_type(cell):
     return letter
 
 
-def wrap_load_book(path: str):
+def wrap_load_book(path: str, data_only=True):
     """ Wrapper for load_workbook """
     # The following breaks at 'ws.path'!
     #wbk = load_workbook(path, data_only=True, read_only=True)
     # Loading normally:
-    wbk = load_workbook(path, data_only=True)
+    wbk = load_workbook(path, data_only=data_only)
     return wbk
 
 
